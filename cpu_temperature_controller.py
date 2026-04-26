@@ -13,6 +13,10 @@ FREQ_INC = "75b0ae3f-bce0-45a7-8c89-c9611c25e100"       # Umbral de aumento
 FREQ_DEC = "75b0ae3f-bce0-45a7-8c89-c9611c25e101"       # Umbral de disminución
 TURBO_BOOST = "be337238-0d82-4146-a960-4f3749d470c7"    # Modo Turbo Boost
 
+
+# VARIABLE GLOBAL - PLAN BASE
+BASE_PLAN = "SCHEME_CURRENT"  # Por defecto usa el plan activo
+
 # Verifica permisos de administrador
 
 
@@ -80,7 +84,11 @@ def mostrar_menu(cpu_vendor, es_intel):
     mostrar_logo()
 
     print(f"\nCPU: {cpu_vendor}")
-    print("Base actual: SCHEME_CURRENT (tu plan activo)")
+    if BASE_PLAN == "SCHEME_CURRENT":
+        print("Base actual: SCHEME_CURRENT (tu plan activo)")
+    else:
+        print(f"Base actual: BALANCED ({PLAN_BALANCED})")
+
     print()
 
     if not es_intel:
@@ -103,6 +111,112 @@ def mostrar_menu(cpu_vendor, es_intel):
 
     opcion = input("Elige una opción [0-9]: ")
     return opcion
+
+
+# APLICAR PERFIL DE TEMPERATURA
+def aplicar_perfil(inc, dec, boost_mode, nombre_perfil, base_plan="SCHEME_CURRENT"):
+    """
+    Aplica un perfil de temperatura modificando el plan de energía
+
+    Parámetros:
+    - inc: Umbral de aumento de frecuencia (0-10000)
+    - dec: Umbral de disminución de frecuencia (0-10000)
+    - boost_mode: Modo Turbo Boost (0=Desactivado, 1=Activado, 2=Agresivo)
+    - nombre_perfil: Nombre descriptivo del perfil
+    - base_plan: Plan a modificar (SCHEME_CURRENT o GUID específico)
+    """
+
+    print(f"\n[*] Aplicando perfil: {nombre_perfil}")
+    print("[*] Modificando plan de energía...")
+
+    try:
+        # 1) Configurar frecuencia máxima al 100%
+        print("    - Configurando frecuencia máxima...")
+        subprocess.run([
+            'powercfg', '/setacvalueindex', base_plan, CPU_GROUP, MAX_FREQ, '100'
+        ], check=True, capture_output=True)
+
+        subprocess.run([
+            'powercfg', '/setdcvalueindex', base_plan, CPU_GROUP, MAX_FREQ, '100'
+        ], check=True, capture_output=True)
+
+        # 2) Configurar umbral de aumento
+        print(f"    - Configurando umbral de aumento: {inc}")
+        subprocess.run([
+            'powercfg', '/setacvalueindex', base_plan, CPU_GROUP, FREQ_INC, str(
+                inc)
+        ], check=True, capture_output=True)
+
+        subprocess.run([
+            'powercfg', '/setdcvalueindex', base_plan, CPU_GROUP, FREQ_INC, str(
+                inc)
+        ], check=True, capture_output=True)
+
+        # 3) Configurar umbral de disminución
+        print(f"    - Configurando umbral de disminución: {dec}")
+        subprocess.run([
+            'powercfg', '/setacvalueindex', base_plan, CPU_GROUP, FREQ_DEC, str(
+                dec)
+        ], check=True, capture_output=True)
+
+        subprocess.run([
+            'powercfg', '/setdcvalueindex', base_plan, CPU_GROUP, FREQ_DEC, str(
+                dec)
+        ], check=True, capture_output=True)
+
+        # 4) Configurar modo Turbo Boost
+        print(f"    - Configurando Turbo Boost: {boost_mode}")
+        subprocess.run([
+            'powercfg', '/setacvalueindex', base_plan, CPU_GROUP, TURBO_BOOST, str(
+                boost_mode)
+        ], check=True, capture_output=True)
+
+        subprocess.run([
+            'powercfg', '/setdcvalueindex', base_plan, CPU_GROUP, TURBO_BOOST, str(
+                boost_mode)
+        ], check=True, capture_output=True)
+
+        # 5) Activar el plan para que los cambios tomen efecto
+        print("    - Activando plan modificado...")
+        subprocess.run([
+            'powercfg', '/setactive', base_plan
+        ], check=True, capture_output=True)
+
+        # Éxito
+        print("\n" + "=" * 50)
+        print(f"[OK] {nombre_perfil} aplicado correctamente")
+        print("=" * 50)
+        print("\nNota:")
+        print("- Los cambios son inmediatos")
+        print("- Monitorea tus temperaturas con HWiNFO o similar")
+        print("- Si no notas cambios, tu software OEM puede estar")
+        print("  reescribiendo la configuración (ASUS Armoury, MSI Center, etc)")
+
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print(f"\n[!] ERROR al aplicar perfil: {e}")
+        print("[!] Asegúrate de ejecutar como ADMINISTRADOR")
+        return False
+    except Exception as e:
+        print(f"\n[!] ERROR inesperado: {e}")
+        return False
+
+
+# CAMBIAR PLAN BASE
+def cambiar_base():
+    """Alterna entre SCHEME_CURRENT y BALANCED"""
+    global BASE_PLAN
+
+    if BASE_PLAN == "SCHEME_CURRENT":
+        BASE_PLAN = PLAN_BALANCED
+        print("\n[OK] Base cambiada a: BALANCED")
+        print(f"    GUID: {PLAN_BALANCED}")
+    else:
+        BASE_PLAN = "SCHEME_CURRENT"
+        print("\n[OK] Base cambiada a: SCHEME_CURRENT (tu plan activo)")
+
+    return BASE_PLAN
 
 # Funcion principal
 

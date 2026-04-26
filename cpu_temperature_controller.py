@@ -2,6 +2,7 @@ import os
 import sys
 import ctypes
 import subprocess
+import re
 
 # CONSTANTES - GUIDs DE POWERCFG
 # Estos son identificadores únicos que Windows usa para configuraciones
@@ -42,9 +43,9 @@ def mostrar_logo():
     print("""
      SSSS   TTTTT  Y   Y  L      EEEEE      JJJJJ  V   V
     S         T     Y Y   L      E            J    V   V
-     SSS      T      Y    L      EEEE         J     V V 
-        S     T      Y    L      E            J      V  
-    SSSS      T      Y    LLLLL  EEEEE     JJJ       V  
+     SSS      T      Y    L      EEEE         J     V V
+        S     T      Y    L      E            J      V
+    SSSS      T      Y    LLLLL  EEEEE     JJJ       V
 
 """)
     print("=" * 60)
@@ -114,7 +115,7 @@ def mostrar_menu(cpu_vendor, es_intel):
 
 
 # APLICAR PERFIL DE TEMPERATURA
-def aplicar_perfil(inc, dec, boost_mode, nombre_perfil, base_plan="SCHEME_CURRENT"):
+def aplicar_perfil(inc, dec, boost_mode, nombre_perfil):
     """
     Aplica un perfil de temperatura modificando el plan de energía
 
@@ -123,8 +124,11 @@ def aplicar_perfil(inc, dec, boost_mode, nombre_perfil, base_plan="SCHEME_CURREN
     - dec: Umbral de disminución de frecuencia (0-10000)
     - boost_mode: Modo Turbo Boost (0=Desactivado, 1=Activado, 2=Agresivo)
     - nombre_perfil: Nombre descriptivo del perfil
-    - base_plan: Plan a modificar (SCHEME_CURRENT o GUID específico)
     """
+
+    # Usar la variable global BASE_PLAN
+    global BASE_PLAN
+    base_plan = BASE_PLAN
 
     print(f"\n[*] Aplicando perfil: {nombre_perfil}")
     print("[*] Modificando plan de energía...")
@@ -218,6 +222,117 @@ def cambiar_base():
 
     return BASE_PLAN
 
+
+# ============================================
+# OBTENER GUID DEL PLAN ACTIVO
+# ============================================
+def obtener_plan_activo():
+    """Obtiene el GUID del plan de energía activo actualmente"""
+    try:
+        resultado = subprocess.run(
+            ['powercfg', '-getactivescheme'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        # El resultado es algo como:
+        # "Plan de energía: 381b4222-f694-41f0-9685-ff5bb260df2e (Equilibrado)"
+        # Necesitamos extraer solo el GUID
+
+        salida = resultado.stdout.strip()
+
+        # Buscar el GUID (tiene formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+        import re
+        match = re.search(
+            r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', salida, re.IGNORECASE)
+
+        if match:
+            return match.group(1)
+        else:
+            return None
+
+    except Exception as e:
+        print(f"[!] Error obteniendo plan activo: {e}")
+        return None
+
+
+# ============================================
+# GUARDAR BACKUP DEL PLAN ORIGINAL
+# ============================================
+def guardar_backup():
+    """Guarda el GUID del plan activo en un archivo de backup"""
+    try:
+        plan_guid = obtener_plan_activo()
+
+        if not plan_guid:
+            print("[!] No se pudo obtener el plan activo para backup")
+            return False
+
+        # Guardar en archivo
+        backup_file = "cpu_controller_backup.txt"
+        with open(backup_file, 'w') as f:
+            f.write(plan_guid)
+
+        print(f"[OK] Backup guardado: {plan_guid}")
+        return True
+
+    except Exception as e:
+        print(f"[!] Error guardando backup: {e}")
+        return False
+
+
+# ============================================
+# CARGAR BACKUP DEL PLAN ORIGINAL
+# ============================================
+def cargar_backup():
+    """Carga el GUID del plan desde el archivo de backup"""
+    try:
+        backup_file = "cpu_controller_backup.txt"
+
+        if not os.path.exists(backup_file):
+            print("[!] No existe archivo de backup")
+            return None
+
+        with open(backup_file, 'r') as f:
+            plan_guid = f.read().strip()
+
+        return plan_guid
+
+    except Exception as e:
+        print(f"[!] Error cargando backup: {e}")
+        return None
+
+
+# RESTAURAR PLAN ORIGINAL
+def restaurar_plan_original():
+    """Restaura el plan de energía a sus valores por defecto"""
+
+    print("\n[*] Restaurando plan a valores por defecto de Windows...")
+
+    # Intentar cargar el GUID del backup
+    restore_guid = cargar_backup()
+
+    # Si no hay backup, usar el plan activo actual
+    if not restore_guid:
+        print("[i] No se encontró backup, usando plan activo actual")
+        restore_guid = obtener_plan_activo()
+
+    # Si aún no tenemos GUID, usar Balanced como último recurso
+    if not restore_guid:
+        print("[!] No se pudo obtener GUID, usando plan Balanced")
+        restore_guid = PLAN_BALANCED
+
+    print(f"[*] Restaurando plan: {restore_guid}")
+
+    try:
+        # Restaurar valores por defecto de Windows:
+        # - Max Processor State = 100%
+        # - Increase/Decrease thresholds = 0 (default)
+        # - Boost mode = 2 (Agresivo - default)
+
+        print("    - Restaurando frecuencia máxima
+
 # Funcion principal
 
 
@@ -232,41 +347,71 @@ def main():
     # Detectar CPU una sola vez
     print("Detectando CPU...")
     cpu_vendor, es_intel = detectar_cpu()
+    # Crear backup del plan original (solo si no existe)
+    if not os.path.exists("cpu_controller_backup.txt"):
+        print("Creando backup del plan original...")
+        guardar_backup()
+        print()
 
     # Loop principal del menú
     while True:
         opcion = mostrar_menu(cpu_vendor, es_intel)
 
         if opcion == "0":
-            print("\n[i] Función 'Cambiar base' - En desarrollo")
+            cambiar_base()
             input("\nPresiona ENTER para continuar...")
 
         elif opcion == "1":
-            print("\n[i] Modo 'Turbo Rendimiento' - En desarrollo")
-            input("\nPresiona ENTER para continuar...")
+            if not es_intel:
+                print("\n[!] CPU no Intel. No se aplicarán cambios.")
+                input("\nPresiona ENTER para continuar...")
+            else:
+                aplicar_perfil(4450, 4400, 2, "Turbo Rendimiento")
+                input("\nPresiona ENTER para continuar...")
 
         elif opcion == "2":
-            print("\n[i] Modo 'Equilibrado Avanzado' - En desarrollo")
-            input("\nPresiona ENTER para continuar...")
+            if not es_intel:
+                print("\n[!] CPU no Intel. No se aplicarán cambios.")
+                input("\nPresiona ENTER para continuar...")
+            else:
+                aplicar_perfil(3900, 3900, 2, "Equilibrado Avanzado")
+                input("\nPresiona ENTER para continuar...")
 
         elif opcion == "3":
-            print("\n[i] Modo 'Fresco / Juegos Livianos' - En desarrollo")
-            input("\nPresiona ENTER para continuar...")
+            if not es_intel:
+                print("\n[!] CPU no Intel. No se aplicarán cambios.")
+                input("\nPresiona ENTER para continuar...")
+            else:
+                aplicar_perfil(3500, 3500, 2, "Fresco / Juegos Livianos")
+                input("\nPresiona ENTER para continuar...")
 
         elif opcion == "4":
-            print("\n[i] Modo 'Ultra Fresco / Sin Boost' - En desarrollo")
-            input("\nPresiona ENTER para continuar...")
+            if not es_intel:
+                print("\n[!] CPU no Intel. No se aplicarán cambios.")
+                input("\nPresiona ENTER para continuar...")
+            else:
+                aplicar_perfil(0, 0, 0, "Ultra Fresco / Sin Boost")
+                input("\nPresiona ENTER para continuar...")
 
         elif opcion == "5":
-            print("\n[i] Modo 'Frecuencia Variable' - En desarrollo")
-            input("\nPresiona ENTER para continuar...")
+            if not es_intel:
+                print("\n[!] CPU no Intel. No se aplicarán cambios.")
+                input("\nPresiona ENTER para continuar...")
+            else:
+                aplicar_perfil(
+                    3200, 3200, 2, "Frecuencia Variable (Recomendado)")
+                input("\nPresiona ENTER para continuar...")
 
         elif opcion == "6":
-            print("\n[i] Modo 'BOOST Extremo' - En desarrollo")
-            input("\nPresiona ENTER para continuar...")
+            if not es_intel:
+                print("\n[!] CPU no Intel. No se aplicarán cambios.")
+                input("\nPresiona ENTER para continuar...")
+            else:
+                aplicar_perfil(3350, 3200, 2, "BOOST Extremo")
+                input("\nPresiona ENTER para continuar...")
 
         elif opcion == "7":
-            print("\n[i] Función 'Restaurar plan' - En desarrollo")
+            restaurar_plan_original()
             input("\nPresiona ENTER para continuar...")
 
         elif opcion == "8":

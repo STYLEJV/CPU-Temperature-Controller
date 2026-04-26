@@ -1,1 +1,24 @@
 cpu_controller_backup.txt
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Archivos de backup del programa
+cpu_controller_backup.txt
+
+# Archivos temporales
+*.log
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp

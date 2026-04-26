@@ -331,7 +331,63 @@ def restaurar_plan_original():
         # - Increase/Decrease thresholds = 0 (default)
         # - Boost mode = 2 (Agresivo - default)
 
-        print("    - Restaurando frecuencia máxima
+        print("    - Restaurando frecuencia máxima (100%)...")
+        subprocess.run([
+            'powercfg', '/setacvalueindex', restore_guid, CPU_GROUP, MAX_FREQ, '100'
+        ], check=True, capture_output=True)
+        subprocess.run([
+            'powercfg', '/setdcvalueindex', restore_guid, CPU_GROUP, MAX_FREQ, '100'
+        ], check=True, capture_output=True)
+
+        print("    - Restaurando umbrales (0)...")
+        subprocess.run([
+            'powercfg', '/setacvalueindex', restore_guid, CPU_GROUP, FREQ_INC, '0'
+        ], check=True, capture_output=True)
+        subprocess.run([
+            'powercfg', '/setdcvalueindex', restore_guid, CPU_GROUP, FREQ_INC, '0'
+        ], check=True, capture_output=True)
+
+        subprocess.run([
+            'powercfg', '/setacvalueindex', restore_guid, CPU_GROUP, FREQ_DEC, '0'
+        ], check=True, capture_output=True)
+        subprocess.run([
+            'powercfg', '/setdcvalueindex', restore_guid, CPU_GROUP, FREQ_DEC, '0'
+        ], check=True, capture_output=True)
+
+        print("    - Restaurando Turbo Boost (Agresivo)...")
+        subprocess.run([
+            'powercfg', '/setacvalueindex', restore_guid, CPU_GROUP, TURBO_BOOST, '2'
+        ], check=True, capture_output=True)
+        subprocess.run([
+            'powercfg', '/setdcvalueindex', restore_guid, CPU_GROUP, TURBO_BOOST, '2'
+        ], check=True, capture_output=True)
+
+        # Activar el plan restaurado
+        print("    - Activando plan restaurado...")
+        subprocess.run([
+            'powercfg', '/setactive', restore_guid
+        ], check=True, capture_output=True)
+
+        # Actualizar la variable global
+        global BASE_PLAN
+        BASE_PLAN = "SCHEME_CURRENT"
+
+        print("\n" + "=" * 50)
+        print("[OK] Plan restaurado a valores por defecto")
+        print(f"    GUID: {restore_guid}")
+        print("=" * 50)
+        print("\nNota:")
+        print("- Turbo Boost reactivado (modo Agresivo)")
+        print("- Todas las configuraciones en valores de fábrica")
+
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print(f"\n[!] ERROR al restaurar plan: {e}")
+        return False
+    except Exception as e:
+        print(f"\n[!] ERROR inesperado: {e}")
+        return False
 
 # Funcion principal
 
